@@ -9,7 +9,7 @@ permissions:
 jobs:
   test:
     name: Tests and frontend build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     services:
       mongo:
         image: mongo:8.0
@@ -55,7 +55,7 @@ jobs:
   deploy-test:
     name: Build containers and deploy test stack
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - name: Create isolated test configuration
