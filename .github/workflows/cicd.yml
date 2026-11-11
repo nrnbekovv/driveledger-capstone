@@ -1,0 +1,82 @@
+name: DriveLedger CI-CD
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    name: Tests and frontend build
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:8.0
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            server/frontend/package-lock.json
+            server/database/package-lock.json
+      - name: Install Python dependencies
+        run: pip install -r server/requirements.txt -r server/djangoapp/microservices/requirements.txt
+      - name: Check migrations and Django tests
+        working-directory: server
+        run: |
+          python manage.py makemigrations --check --dry-run
+          python manage.py check
+          python manage.py test djangoapp -v 2
+      - name: Sentiment tests
+        working-directory: server/djangoapp/microservices
+        run: python -m unittest -v
+      - name: Express-Mongo integration tests
+        working-directory: server/database
+        env:
+          TEST_MONGO_URL: mongodb://127.0.0.1:27017
+        run: |
+          npm ci
+          npm test
+      - name: Build React
+        working-directory: server/frontend
+        run: |
+          npm ci
+          npm run build
+  deploy-test:
+    name: Build containers and deploy test stack
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create isolated test configuration
+        run: |
+          printf 'DJANGO_SECRET_KEY=%s\nBACKEND_API_KEY=%s\nDEMO_PASSWORD=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(openssl rand -hex 16)" > .env
+      - name: Build and deploy all services
+        run: docker compose up --build -d --wait --wait-timeout 240
+      - name: Verify deployed application
+        run: |
+          curl --fail http://localhost:8000/djangoapp/health
+          curl --fail http://localhost:8000/djangoapp/get_dealers/Kansas
+          curl --fail http://localhost:8000/ | grep DriveLedger
+          docker compose exec -T web python manage.py check
+      - name: Save container logs
+        if: always()
+        run: docker compose logs --no-color > container-logs.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: container-deployment-logs
+          path: container-logs.txt
+      - name: Stop isolated test stack
+        if: always()
+        run: docker compose down -v

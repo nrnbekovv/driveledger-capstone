@@ -1,22 +1,22 @@
-# Uncomment the imports below before you add the function code
-# import requests
-import os
-from dotenv import load_dotenv
+from urllib.parse import quote
+import requests
+from django.conf import settings
 
-load_dotenv()
 
-backend_url = os.getenv(
-    'backend_url', default="http://localhost:3030")
-sentiment_analyzer_url = os.getenv(
-    'sentiment_analyzer_url',
-    default="http://localhost:5050/")
+def get_request(endpoint):
+    response = requests.get(f'{settings.BACKEND_URL}/{endpoint.lstrip("/")}', timeout=10)
+    response.raise_for_status()
+    return response.json()
 
-# def get_request(endpoint, **kwargs):
-# Add code for get requests to back end
 
-# def analyze_review_sentiments(text):
-# request_url = sentiment_analyzer_url+"analyze/"+text
-# Add code for retrieving sentiments
+def analyze_review_sentiments(text):
+    response = requests.get(f'{settings.SENTIMENT_URL}/analyze/{quote(text, safe="")}', timeout=8)
+    response.raise_for_status()
+    return response.json()
 
-# def post_review(data_dict):
-# Add code for posting review
+
+def post_review(data):
+    response = requests.post(f'{settings.BACKEND_URL}/insert_review', json=data,
+        headers={'X-API-Key': settings.BACKEND_API_KEY}, timeout=10)
+    response.raise_for_status()
+    return response.json()

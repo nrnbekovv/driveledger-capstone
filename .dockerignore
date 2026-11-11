@@ -1,0 +1,14 @@
+.git
+.env
+.env.*
+!.env.example
+**/node_modules
+**/.local
+**/__pycache__
+**/*.pyc
+**/*.sqlite3
+**/staticfiles
+**/frontend/dist
+**/frontend/build
+work
+evidence
